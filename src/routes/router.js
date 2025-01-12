@@ -5,12 +5,12 @@ import aggregationtran from "../controller/aggregationTransactionController.js"
 import verifyAuthentication from "../middleware/authMiddleware.js";
 import getAllProducts, { getPackagingHierarchy } from "../controller/productController.js";
 import getBatchesByProductId from "../controller/batchController.js"
-import scan from "../controller/codeScanController.js";
+import scan, { codeScan } from "../controller/codeScanController.js";
 import dropoutRouter from "./dropout.js";
 
 
 // dropout
-router.use("/api/v1/dropout",verifyAuthentication,dropoutRouter)
+router.use("/api/v1/dropout", verifyAuthentication, dropoutRouter)
 
 
 // Use the authRouter for all routes starting with "/api/v1/auth"
@@ -29,6 +29,8 @@ router.post("/api/v1/aggregationtransaction/addaggregation", verifyAuthenticatio
 
 
 router.post("/api/v1/scan", verifyAuthentication, scan)
+router.post("/api/v1/codeScan", verifyAuthentication, codeScan)
+
 
 
 

@@ -62,32 +62,43 @@ const getPackagingHierarchy = async (req, res) => {
     if (!product) {
       return handlePrismaError(res, null, "Product not found", ResponseCodes.NOT_FOUND);
     }
+    let totalProduct = 0;
     if (product.packagingHierarchy) {
 
       const packaging_size = {}
       if (product.productNumber) {
+        totalProduct += product.productNumber;
         packaging_size["level0"] = product.productNumber;
       }
       if (product.firstLayer) {
+        totalProduct += product.firstLayer;
         packaging_size['level1'] = product.firstLayer;
-      }
+      } 
       if (product.secondLayer) {
+        totalProduct += product.secondLayer;
         packaging_size['level2'] = product.secondLayer;
       }
       if (product.thirdLayer) {
+        totalProduct += product.thirdLayer;
         packaging_size['level3'] = product.thirdLayer;
       }
+      totalProduct += 1
       packaging_size['level5'] = 1
       // console.log(packaging_size)
       const packaging_size_value = Object.values(packaging_size);
       packaging_size_value.push(1)
       const productLevel = []
+      const productWithLevel = {}
+      let perPackageProduct = 0
       console.log(product.packagingHierarchy)
-      for (let i = currentLevel; i < product.packagingHierarchy + 1; i++) {
+      for (let i = 0; i < product.packagingHierarchy + 1; i++) {
         productLevel.push((packaging_size_value[i] / packaging_size_value[i + 1]))
+        productWithLevel[`level${i}`] = (packaging_size_value[i] / (packaging_size_value[i] / packaging_size_value[i + 1]))
+        perPackageProduct += productWithLevel[`level${i}`]
       }
+      perPackageProduct--
       const [quantity, packaged] = productLevel;
-      handlePrismaSuccess(res, "Get successfully", { packaged, quantity, currenlLevel: currentLevel, totallevel: product.packagingHierarchy, });
+      handlePrismaSuccess(res, "Get successfully", { packaged, quantity, currenlLevel: currentLevel, totalLevel: product.packagingHierarchy, totalProduct: totalProduct, perPackageProduct });
     }
   }
   catch (error) {
