@@ -58,14 +58,13 @@ const getPackagingHierarchy = async (req, res) => {
     if (!product_id) {
       return handlePrismaError(res, null, "Product Id is required", ResponseCodes.BAD_REQUEST);
     }
-    const product = await prisma.product.findFirst({ where: { id: product_id } }); // Ensure 'where' clause is used in Prisma query
+    const product = await prisma.product.findFirst({ where: { id: product_id } });
     if (!product) {
       return handlePrismaError(res, null, "Product not found", ResponseCodes.NOT_FOUND);
     }
     let totalProduct = 0;
+    const packaging_size = {};
     if (product.packagingHierarchy) {
-
-      const packaging_size = {}
       if (product.productNumber) {
         totalProduct += product.productNumber;
         packaging_size["level0"] = product.productNumber;
@@ -73,7 +72,7 @@ const getPackagingHierarchy = async (req, res) => {
       if (product.firstLayer) {
         totalProduct += product.firstLayer;
         packaging_size['level1'] = product.firstLayer;
-      } 
+      }
       if (product.secondLayer) {
         totalProduct += product.secondLayer;
         packaging_size['level2'] = product.secondLayer;
@@ -82,24 +81,53 @@ const getPackagingHierarchy = async (req, res) => {
         totalProduct += product.thirdLayer;
         packaging_size['level3'] = product.thirdLayer;
       }
-      totalProduct += 1
-      packaging_size['level5'] = 1
-      // console.log(packaging_size)
+
+      // Add level 5 (unit per package)
+      totalProduct += 1;
+      packaging_size['level5'] = 1;
+
+      // Create packaging_size_value array, including the final value of 1 for unit level
       const packaging_size_value = Object.values(packaging_size);
-      packaging_size_value.push(1)
-      const productLevel = []
-      const productWithLevel = {}
-      let perPackageProduct = 0
-      console.log(product.packagingHierarchy)
+      packaging_size_value.push(1);
+
+      const productLevel = [];
+      const productWithLevel = {};
+      let perPackageProduct = 0;
+
+      console.log('Packaging Hierarchy:');
+      console.log('----------------------------------------------------------------------');
+      // Loop through packaging hierarchy levels and calculate values
       for (let i = 0; i < product.packagingHierarchy + 1; i++) {
-        productLevel.push((packaging_size_value[i] / packaging_size_value[i + 1]))
-        productWithLevel[`level${i}`] = (packaging_size_value[i] / (packaging_size_value[i] / packaging_size_value[i + 1]))
-        perPackageProduct += productWithLevel[`level${i}`]
+        const currentLevelValue = packaging_size_value[i];
+        const nextLevelValue = packaging_size_value[i + 1];
+      // Calculate product level ratio
+        const levelRatio = currentLevelValue / nextLevelValue;
+  
+        productLevel.push(levelRatio);
+        // Assign value for each level
+        productWithLevel[`level${i}`] = levelRatio;
+        perPackageProduct += productWithLevel[`level${i}`];
       }
-      perPackageProduct--
+
+      perPackageProduct++
+
+      console.log('----------------------------------------------------------------------');
+      console.log('Product Level Ratios:', productLevel.slice(currentLevel, productLevel.length));
+      console.log('Product with Level Breakdown:', productWithLevel);
+
+      // Destructure the first two values for quantity and packaged
       const [quantity, packaged] = productLevel;
-      handlePrismaSuccess(res, "Get successfully", { packaged, quantity, currenlLevel: currentLevel, totalLevel: product.packagingHierarchy, totalProduct: totalProduct, perPackageProduct });
+
+      handlePrismaSuccess(res, "Get successfully", {
+        packaged,
+        quantity,
+        currentLevel,
+        totalLevel: product.packagingHierarchy,
+        totalProduct,
+        perPackageProduct
+      });
     }
+
   }
   catch (error) {
     console.error("Error while fetching products:", error);

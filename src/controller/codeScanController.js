@@ -207,11 +207,11 @@ const codeScan = async (req, res) => {
     }
     totalProduct--;
     perPackageProduct--;
-    if (packaged == 0) {
+    if (packaged == 0 && totalProduct == 1) {
       // perPackageProduct--;
-      if (totalProduct == 1) {
-        currentPackageLevel = 5
-      }
+      // if (totalProduct == 1) {
+      currentPackageLevel = 5
+      // }
     }
     else {
       if (quantity == 0) {
