@@ -1,7 +1,5 @@
 // utils/auditLogger.js
-
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import prisma from "../../DB/db.config.js";
 
 export const logAudit = async ({ performed_action, remarks, user_name, user_id }) => {
     try {

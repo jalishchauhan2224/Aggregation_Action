@@ -1,38 +1,26 @@
 import { handlePrismaSuccess, handlePrismaError } from "../services/prismaResponseHandler.js";
 import { UserResponseCodes, PasswordPolicy, ResponseCodes } from "../../constant.js";
-import { decrypt, encrypt } from "../services/encryptDecrypt.js";
+import { decrypt } from "../services/encryptDecrypt.js";
 import { logAudit } from '../utils/auditLog.js'
 import prisma from "../../DB/db.config.js";
 import pkg from 'jsonwebtoken';
-import { esign_status } from "@prisma/client";
+import loginSchema from "../validation/authValidation.js";
 const { sign } = pkg;
 
-const login = async (request, res) => {
-  const { user_id, password, forceFully = false } = request.body;
-
-  console.log(request.body);
-
+const login = async (req, res) => {
   try {
+  const validation = await loginSchema.validateAsync(req.body)
+    console.log(validation);
+  
     // Fetch user by userId
-    const user = await findByUserId(user_id);
-
+    const user = await findByUserId(validation.userId);
     if (!user) {
-      handlePrismaError(
-        res,
-        undefined,
-        "Invalid username or password",
-        UserResponseCodes.USER_NOT_FOUND
-      );
+      handlePrismaError(res, undefined, "Invalid username or password",UserResponseCodes.USER_NOT_FOUND );
       return;
     }
 
     if (!user.is_active) {
-      handlePrismaError(
-        res,
-        undefined,
-        "User is deleted",
-        UserResponseCodes.USER_DELETED_ERROR
-      );
+      handlePrismaError(res, undefined,"User is deleted", UserResponseCodes.USER_DELETED_ERROR);
       return;
     }
 
@@ -47,12 +35,9 @@ const login = async (request, res) => {
         where: { id: user.id },
         data: { failed_login_attempt_count: 0 },
       });
+
       handlePrismaError(
-        res,
-        undefined,
-        `Account is locked until ${user.account_locked_until_at}`,
-        ResponseCodes.ACCOUNT_LOCKED_ERROR
-      );
+        res,undefined,`Account is locked until ${user.account_locked_until_at}`, ResponseCodes.ACCOUNT_LOCKED_ERROR);
       return;
     }
 
@@ -62,19 +47,17 @@ const login = async (request, res) => {
         where: { id: user.id },
         data: { account_locked_until_at: new Date(lockTime) },
       });
+
       handlePrismaError(
-        res,
-        undefined,
-        "Too many failed login attempts. Please try again later.",
-        ResponseCodes.TOO_MANY_REQUEST
-      );
+        res,undefined,"Too many failed login attempts. Please try again later.",ResponseCodes.TOO_MANY_REQUEST);
       return;
     }
 
     // Verify password
     console.log(user.password)
+
     const originalPassword = await decrypt(user.password);
-    if (originalPassword !== password) {
+    if (originalPassword !== validation.password) {
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -83,32 +66,22 @@ const login = async (request, res) => {
         },
       });
       handlePrismaError(
-        res,
-        undefined,
-        "Invalid username or password",
-        UserResponseCodes.USER_PASSWORD_MATCH_ERROR
-      );
+         res, undefined,"Invalid username or password",UserResponseCodes.USER_PASSWORD_MATCH_ERROR);
       return;
     }
     // Check for expired password
     if (user.password_expires_on && user.password_expires_on < currentDate) {
       handlePrismaError(
-        res,
-        undefined,
-        "Password expired, please reset your password",
-        ResponseCodes.UNAUTHORIZED
+        res,undefined,"Password expired, please reset your password",ResponseCodes.UNAUTHORIZED
       );
       return;
     }
 
     const checker = await prisma.superadmin_configuration.findMany();
     // Ensure user is not already logged in
-    if (user.jwt_token !== null && !forceFully) {
+    if (user.jwt_token !== null && !validation.forceFully) {
       handlePrismaError(
-        res,
-        undefined,
-        "User is already logged in, please logout and login again",
-        UserResponseCodes.USER_ALREADY_EXIST
+        res,undefined,"User is already logged in, please logout and login again",UserResponseCodes.USER_ALREADY_EXIST
       );
       return;
     }
@@ -139,7 +112,7 @@ const login = async (request, res) => {
       }
     });
 
-    if (request.body.audit_logs) {
+    if (req.body.audit_logs) {
       await logAudit({
         performed_action: "login",
         remarks: "user logged in",
@@ -158,13 +131,16 @@ const login = async (request, res) => {
       email: loginRes.email,
       profile_image: loginRes.profile_photo,
     });
+
   } catch (error) {
+    if(error.isJoi === true){
+      return handlePrismaError(
+        res, error.details[0].message,undefined ,ResponseCodes.INTERNAL_SERVER_ERROR
+      )
+    }
     console.log("Error in login ", error);
     handlePrismaError(
-      res,
-      undefined,
-      "Invalid username or password",
-      UserResponseCodes.USER_PASSWORD_MATCH_ERROR
+      res,undefined,"Invalid username or password",UserResponseCodes.USER_PASSWORD_MATCH_ERROR
     );
   }
 };
@@ -207,7 +183,6 @@ const findByUserId = async (userId) => {
         // Add similar selection if designations or other relations are needed
       },
     });
-
     return user;
   } catch (error) {
     console.error("Error fetching user:", error);
@@ -215,16 +190,17 @@ const findByUserId = async (userId) => {
 };
 
 
-const logout = async (request, res) => {
-
-  const token = request.headers.authorization?.split(" ")[1]; // Extract token from Authorization header
+const logout = async (req, res) => {
+ // Extract token from Authorization header
+  const token = req.headers.authorization?.split(" ")[1];
   console.log(token);
-  console.log(request.headers);
-  console.log("logggg");
+  console.log(req.headers);
 
 
   if (!token) {
-    return res.status(401).json({ message: "Token missing" });
+    handlePrismaError(
+      res, undefined,"Token missing",ResponseCodes.UNAUTHORIZED
+    );
   }
 
   try {
@@ -249,33 +225,29 @@ const logout = async (request, res) => {
     console.log("Logout successful");
 
   } catch (err) {
+    if(err.isJoi === true){
+      return handlePrismaError(
+        res, err.details[0].message,undefined ,ResponseCodes.INTERNAL_SERVER_ERROR
+      )
+    }
     console.error("Logout failed", err);
     handlePrismaError(
-      res,
-      undefined,
-      "Logout failed",
-      ResponseCodes.BAD_REQUEST
-    );
+       res, undefined,"Logout failed",ResponseCodes.BAD_REQUEST
+      );
   }
 };
 
 const checkUserActive = (res, user) => {
   if (!user) {
     handlePrismaError(
-      res,
-      undefined,
-      "Invalid username or password",
-      UserResponseCodes.USER_NOT_FOUND
+      res,undefined,"Invalid username or password",UserResponseCodes.USER_NOT_FOUND
     );
     return;
   }
 
   if (!user.is_active) {
     handlePrismaError(
-      res,
-      undefined,
-      "User is deleted",
-      UserResponseCodes.USER_DELETED_ERROR
+      res,undefined,"User is deleted",UserResponseCodes.USER_DELETED_ERROR
     );
   }
 };
@@ -287,10 +259,7 @@ const checkUserMaxAttempt = async (res, user, lockTime) => {
       data: { account_locked_until_at: new Date(lockTime) },
     });
     handlePrismaError(
-      res,
-      undefined,
-      `Too many failed login attempts. Please try again later.`,
-      ResponseCodes.TOO_MANY_REQUEST
+      res,undefined,`Too many failed login attempts. Please try again later.`,ResponseCodes.TOO_MANY_REQUEST
     );
     return;
   }
@@ -312,21 +281,14 @@ const checkUserPassword = async (
       },
     });
     handlePrismaError(
-      res,
-      undefined,
-      "Invalid username or password",
-      UserResponseCodes.USER_PASSWORD_MATCH_ERROR
+      res,undefined,"Invalid username or password",UserResponseCodes.USER_PASSWORD_MATCH_ERROR
     );
   }
 };
 
 const checkPasswordExpire = async (res, user, currentDate) => {
   if (user.password_expires_on && user.password_expires_on < currentDate) {
-    handlePrismaError(
-      res,
-      undefined,
-      "Password expired, please reset your password",
-      ResponseCodes.UNAUTHORIZED
+    handlePrismaError(res,undefined,"Password expired, please reset your password",ResponseCodes.UNAUTHORIZED
     );
   }
 };
@@ -339,10 +301,7 @@ const checkUserAccountLock = async (res, user, currentDate) => {
       data: { failed_login_attempt_count: 0 },
     });
     handlePrismaError(
-      res,
-      undefined,
-      `Account is locked until ${user.account_locked_until_at}`,
-      ResponseCodes.ACCOUNT_LOCKED_ERROR
+      res,undefined,`Account is locked until ${user.account_locked_until_at}`,ResponseCodes.ACCOUNT_LOCKED_ERROR
     );
     return;
   }
@@ -350,8 +309,7 @@ const checkUserAccountLock = async (res, user, currentDate) => {
 
 const securityCheck = async (request, res) => {
   console.log(request.body)
-  const { userId, password, securityCheck, approveAPIName, approveAPImethod } =
-    request.body;
+  const { userId, password, securityCheck, approveAPIName, approveAPImethod } = request.body;
   try {
     const user = await findByUserId(userId);
     console.log(user)
@@ -370,24 +328,17 @@ const securityCheck = async (request, res) => {
 
     if (!securityCheck) {
       handlePrismaError(
-        res,
-        undefined,
-        "Invalid username or password",
-        UserResponseCodes.USER_PASSWORD_MATCH_ERROR
+        res,undefined,"Invalid username or password",UserResponseCodes.USER_PASSWORD_MATCH_ERROR
       );
       return;
     }
+
     const audit_logs = { auditlog_username: user.user_name, auditlog_userid: user.user_id, esign_status_id: user.id }
     const designation = await prisma.designations.findUnique({
       where: { id: user?.designation_id },
     });
     if (!user.designation_id || !designation) {
-      handlePrismaError(
-        res,
-        undefined,
-        "Access denied, no designation found",
-        ResponseCodes.UNAUTHORIZED
-      );
+      handlePrismaError(res,undefined,"Access denied, no designation found",ResponseCodes.UNAUTHORIZED);
       return;
     }
 
@@ -406,10 +357,7 @@ const securityCheck = async (request, res) => {
 
     if (!valueExists) {
       handlePrismaError(
-        res,
-        undefined,
-        `Access denied, ${approveAPIName} API is not found`,
-        ResponseCodes.UNAUTHORIZED
+        res,undefined,`Access denied, ${approveAPIName} API is not found`,ResponseCodes.UNAUTHORIZED
       );
       return;
     }
@@ -430,13 +378,16 @@ const securityCheck = async (request, res) => {
       user_id: user.id,
       success: true
     });
+    
   } catch (error) {
     console.error("Error in login", error);
-    handlePrismaError(
-      res,
-      error,
-      "Invalid username or password",
-      ResponseCodes.INTERNAL_SERVER_ERROR
+      if(error.isJoi === true){
+        return handlePrismaError (
+          res,undefined, error.details[0].message ,ResponseCodes.INTERNAL_SERVER_ERROR
+        )
+      }
+    handlePrismaError( 
+      res,error,"Invalid username or password",ResponseCodes.INTERNAL_SERVER_ERROR
     );
   }
 };
