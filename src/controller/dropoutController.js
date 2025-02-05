@@ -1,7 +1,8 @@
 import { ResponseCodes } from "../../constant.js";
 import prisma from "../../DB/db.config.js";
-import {dropOutValidattion,dropoutCodesValidation} from "../validation/dropOutValidation.js";
-import { handlePrismaError,handlePrismaSuccess } from "../services/prismaResponseHandler.js";
+import { dropOutValidattion, dropoutCodesValidation } from "../validation/dropOutValidation.js";
+import { handlePrismaError, handlePrismaSuccess } from "../services/prismaResponseHandler.js";
+import { type } from "@hapi/joi/lib/extend.js";
 
 const dropoutWholeBatch = async (req, res) => {
   try {
@@ -12,7 +13,7 @@ const dropoutWholeBatch = async (req, res) => {
     // Check product id and batch id
     if (!validation.product_id || !validation.batch_id) {
       return handlePrismaError(
-        res,undefined, "Missing required fields: product_id or batch_id", ResponseCodes.BAD_REQUEST
+        res, undefined, "Missing required fields: product_id or batch_id", ResponseCodes.BAD_REQUEST
       );
     }
 
@@ -29,7 +30,7 @@ const dropoutWholeBatch = async (req, res) => {
     // check batch id is found or not
     if (!batchDetails || !batchDetails.productHistory) {
       return handlePrismaError(
-        res,undefined, "Batch details or product history not found", ResponseCodes.NOT_FOUND
+        res, undefined, "Batch details or product history not found", ResponseCodes.NOT_FOUND
       );
 
     }
@@ -54,7 +55,7 @@ const dropoutWholeBatch = async (req, res) => {
     // check product generation id find or not
     if (!productGenerationDetails) {
       return handlePrismaError(
-        res,undefined, "Product generation details not found", ResponseCodes.NOT_FOUND
+        res, undefined, "Product generation details not found", ResponseCodes.NOT_FOUND
       );
 
     }
@@ -76,9 +77,10 @@ const dropoutWholeBatch = async (req, res) => {
     const codes = [];
     for (let i = 0; i < loopedValues.length; i++) {
       const value = loopedValues[i];
-      codes.push(`${tableNamePrefix}${value}_codes`);
+      const tableName = value != 5 ? `${tableNamePrefix}${value}_codes` : `sscc_codes`
+      codes.push(tableName);
       await prisma.$queryRawUnsafe(
-        `UPDATE "${tableNamePrefix}${value}_codes" 
+        `UPDATE "${tableName}" 
          SET is_dropped = true, 
              dropout_reason = $1`,
         validation.dropout_reason
@@ -89,14 +91,14 @@ const dropoutWholeBatch = async (req, res) => {
     return handlePrismaSuccess(res, "Batch dropout successfully");
 
   } catch (error) {
-      if(error.isJoi === true){
-        return handlePrismaError(
-          res,undefined, error.details[0].message ,ResponseCodes.INTERNAL_SERVER_ERROR
-        )
-      }
+    if (error.isJoi === true) {
+      return handlePrismaError(
+        res, undefined, error?.message, ResponseCodes.INTERNAL_SERVER_ERROR
+      )
+    }
     console.error("Error in dropoutWholeBatch:", error);
-     return handlePrismaError(
-      res,undefined, "Internal server error", ResponseCodes.INTERNAL_SERVER_ERROR
+    return handlePrismaError(
+      res, undefined, "Internal server error", ResponseCodes.INTERNAL_SERVER_ERROR
     );
   }
 };
@@ -106,10 +108,11 @@ async function updateCodes(tablePrefix, tableLevel, codes, dropout_reason) {
     `Updating table: ${tablePrefix}${tableLevel}_codes for codes:`,
     codes
   );
+
   await prisma.$executeRawUnsafe(
     `UPDATE "${tablePrefix}${tableLevel}_codes"
        SET is_dropped = true,
-       dropout_reason = ${dropout_reason}
+       "dropout_reason" = '${dropout_reason}'
        WHERE unique_code IN (${codes.map((code) => `'${code}'`).join(",")})`
   );
 }
@@ -127,10 +130,10 @@ async function updateChildTable(
   );
   return await prisma.$queryRawUnsafe(
     `UPDATE "${childTableName}"
-         SET is_dropped = true, 
-         dropout_reason = $1
-         WHERE parent_id = ANY($2::uuid[])
-         RETURNING id`,
+     SET is_dropped = true, 
+         "dropout_reason" = $1
+     WHERE "parent_id" = ANY($2::uuid[])
+     RETURNING id`,
     dropout_reason,
     parentIds
   );
@@ -152,7 +155,7 @@ async function processResults(result, tableNamePrefix, dropout_reason, packaging
   for (const [tableLevel, codes] of Object.entries(result)) {
     let currentTableLevel = parseInt(tableLevel);
 
-    console.log("Processing table level:",currentTableLevel,"with codes:",codes);
+    console.log("Processing table level:", currentTableLevel, "with codes:", codes);
 
     if (currentTableLevel === 0) {
       await updateCodes(
@@ -162,23 +165,27 @@ async function processResults(result, tableNamePrefix, dropout_reason, packaging
         dropout_reason
       );
     } else {
+      const tableName = currentTableLevel == 5 ? `sscc_codes` : `${tableNamePrefix}${currentTableLevel}_codes`
       for (const code of codes) {
+        console.log("code ", code, currentTableLevel)
+        console.log(tableName)
         const updateResult = await prisma.$queryRawUnsafe(
-          `UPDATE "${tableNamePrefix}${currentTableLevel}_codes"
+          `UPDATE "${tableName}"
              SET is_dropped = true,
              dropout_reason = $1
-             WHERE unique_code = $2
+             WHERE ${currentTableLevel == 5 || tableName == "sscc_codes" ? 'sscc_code' : 'unique_code'} = $2
              RETURNING id`,
           dropout_reason,
           code
         );
-
+        console.log("Update Result ", updateResult)
         if (updateResult.length > 0) {
           let parentIds = [updateResult[0].id];
           console.log("Updated record with ID:", parentIds);
 
           while (currentTableLevel > 0) {
             console.log("Current level while ", currentTableLevel);
+            console.log('packagingHierarchy :', packagingHierarchy)
             const updateCurrentLevel =
               currentTableLevel === 5
                 ? childTableMap[currentTableLevel][packagingHierarchy]
@@ -203,13 +210,13 @@ async function processResults(result, tableNamePrefix, dropout_reason, packaging
 
 const dropoutCodes = async (req, res) => {
 
+  console.log("Dropout req body ", req.body);
   const validation = await dropoutCodesValidation.validateAsync(req.body);
   try {
-    // console.log("Dropout req body ", req.body);
 
     if (!validation.product_id || !validation.batch_id) {
       return handlePrismaError(
-        res,undefined,"Missing required fields: product_id or batch_id", ResponseCodes.BAD_REQUEST
+        res, undefined, "Missing required fields: product_id or batch_id", ResponseCodes.BAD_REQUEST
       );
     }
 
@@ -224,7 +231,7 @@ const dropoutCodes = async (req, res) => {
 
     if (!batchDetails || !batchDetails.productHistory) {
       return handlePrismaError(
-        res,undefined, "Batch details or product history not found", ResponseCodes.NOT_FOUND);
+        res, undefined, "Batch details or product history not found", ResponseCodes.NOT_FOUND);
     }
 
     const { product_uuid, packagingHierarchy } = batchDetails.productHistory;
@@ -243,7 +250,7 @@ const dropoutCodes = async (req, res) => {
 
     if (!productGenerationDetails) {
       return handlePrismaError(
-        res,undefined, "Product generation details not found", ResponseCodes.NOT_FOUND
+        res, undefined, "Product generation details not found", ResponseCodes.NOT_FOUND
       );
     }
 
@@ -257,13 +264,13 @@ const dropoutCodes = async (req, res) => {
 
     const loopedValues = hierarchyMap[packagingHierarchy] || [];
 
-    // console.log(`Looped values for Packaging Hierarchy ${packagingHierarchy}:`,loopedValues);
+    // console.log(`Looped values for Packaging Hierarchy ${ packagingHierarchy }: `,loopedValues);
     let tableNamePrefix = productGenerationDetails.generation_id.toLowerCase();
 
     // const codes = [];
     // for (let i = 0; i < loopedValues.length; i++) {
     //   const value = loopedValues[i];
-    //   codes.push(`${tableNamePrefix}${value}_codes`);
+    //   codes.push(`${ tableNamePrefix }${ value } _codes`);
     // }
     // console.log("Generated Codes:", codes);
 
@@ -274,11 +281,11 @@ const dropoutCodes = async (req, res) => {
       },
     });
     const result = validation.dropoutCodes.reduce((acc, item) => {
-      const n = item.slice(
+      const isSscc = item.startsWith(productGenerationDetails.generation_id);
+      const n = !isSscc ? 5 : item.slice(
         superConfig[0].product_code_length,
         superConfig[0].product_code_length + 1
       );
-
       if (!acc[n]) {
         acc[n] = [];
       }
@@ -291,20 +298,20 @@ const dropoutCodes = async (req, res) => {
     await processResults(result, tableNamePrefix, validation.dropout_reason, packagingHierarchy);
 
     return handlePrismaSuccess(
-      res, "Scanned codes dropped successfully", 
+      res, "Scanned codes dropped successfully",
     );
 
   } catch (error) {
     console.log(error);
-    
-      if(error.isJoi === true){
-        return handlePrismaError(
-          res,undefined, error.details[0].message,ResponseCodes.INTERNAL_SERVER_ERROR
-        )
-      }
+
+    if (error.isJoi === true) {
+      return handlePrismaError(
+        res, error, error?.message, ResponseCodes.INTERNAL_SERVER_ERROR
+      )
+    }
     console.error("Error in dropout codes :", error);
     return handlePrismaError(
-    res,undefined, error.meta.message ,ResponseCodes.INTERNAL_SERVER_ERROR
+      res, error, error?.message, ResponseCodes.INTERNAL_SERVER_ERROR
     );
   }
 };

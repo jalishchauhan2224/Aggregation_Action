@@ -1,4 +1,4 @@
-import { Socket } from 'net';
-const printer = new Socket();
+    import { Socket } from 'net';
+    const printer = new Socket();
 
-export default printer;
+    export default printer;

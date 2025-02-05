@@ -1,6 +1,6 @@
 import pkg from "jsonwebtoken";
 const { verify } = pkg;
-import { PasswordPolicy, ResponseCodes  } from "../../constant.js";
+import { PasswordPolicy, ResponseCodes } from "../../constant.js";
 import { PrismaClient } from "@prisma/client";
 import { handlePrismaError } from "../services/prismaResponseHandler.js";
 const prisma = new PrismaClient();
@@ -9,9 +9,9 @@ const secret_key = process.env.encryptDecryptKey;
 
 // Middleware to verify authentication
 const verifyAuthentication = async (request, response, next) => {
+  // console.log(request.body)
   let authToken = request.headers["authorization"]?.replace("Bearer ", "");
   // Check if authToken exists
-  
   if (!authToken) {
     handlePrismaError(response, undefined, "Please provide valid authentication token", ResponseCodes.UNAUTHORIZED);
     return;
@@ -22,7 +22,7 @@ const verifyAuthentication = async (request, response, next) => {
     // Extract userId from the decoded token and attach it to the request object
     request.id = userId;
     request.userName = userName;
-    
+
     const user = await prisma.user.findUnique({
       where: {
         id: userId,

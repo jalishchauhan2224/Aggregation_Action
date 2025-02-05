@@ -10,10 +10,10 @@ const aggregationtran = async (req, res) => {
     console.log(req.id);
     const { auditlog_username, auditlog_userid } = req;
     console.log(auditlog_username);
-    
+
     if (!validation.productId || !validation.batchId) {
       return handlePrismaError(
-        res,undefined,"Missing required fields: productId or batchId", ResponseCodes.BAD_REQUEST
+        res, undefined, "Missing required fields: productId or batchId", ResponseCodes.BAD_REQUEST
       );
     }
 
@@ -29,7 +29,7 @@ const aggregationtran = async (req, res) => {
 
     if (!productGeneration || !productGeneration.generation_id) {
       return handlePrismaError(
-        res,undefined,"Generation ID not found for the provided productId",ResponseCodes.NOT_FOUND  
+        res, undefined, "Generation ID not found for the provided productId", ResponseCodes.NOT_FOUND
       )
     }
 
@@ -45,9 +45,11 @@ const aggregationtran = async (req, res) => {
       },
     });
 
+    console.log(productHistory)
+
     if (!productHistory) {
       return handlePrismaError(
-        res, undefined,"Packaging hierarchy not found for the provided productId",ResponseCodes.NOT_FOUND 
+        res, undefined, "Packaging hierarchy not found for the provided productId", ResponseCodes.NOT_FOUND
       );
     }
 
@@ -65,7 +67,7 @@ const aggregationtran = async (req, res) => {
 
     if (!batchDetails) {
       return handlePrismaError(
-        res, undefined,"Batch details not found for the provided productId",ResponseCodes.NOT_FOUND,
+        res, undefined, "Batch details not found for the provided productId", ResponseCodes.NOT_FOUND,
       );
     }
 
@@ -78,13 +80,15 @@ const aggregationtran = async (req, res) => {
       },
     });
     console.log("Aaa");
-    
+
     console.log(existingAggregation);
     if (existingAggregation) {
-    console.log("Aggregation transaction already exists in this user");
-    return handlePrismaError(
-      res,undefined,"Aggregation transaction already exists for this user",ResponseCodes.CONFLICT
-    )}
+      console.log("Aggregation transaction already exists in this user");
+      return handlePrismaError(
+        res, undefined, "Aggregation transaction already exists for this user", ResponseCodes.CONFLICT
+      )
+    }
+
 
     // Create a new aggregation transaction
     const updateAggregation = await prisma.aggregation_transaction.create({
@@ -95,7 +99,7 @@ const aggregationtran = async (req, res) => {
         product_gen_id: productGeneration.generation_id,
         packagingHierarchy: productHistory.packagingHierarchy,
         producthistory_uuid: batchDetails.producthistory_uuid,
-        esign_status:validation.esign_status,
+        status: validation.status,
       },
     });
     console.log("Aggregation transaction created:", updateAggregation);
@@ -107,18 +111,20 @@ const aggregationtran = async (req, res) => {
         user_id: auditlog_userid,
       });
     }
-    return handlePrismaSuccess(res,"Aggregation transaction created successfully")
+    return handlePrismaSuccess(res, "Aggregation transaction created successfully")
 
   } catch (error) {
-    if(error.isJoi === true){
-      return handlePrismaError (
-        res,undefined, error.meta.message ,ResponseCodes.INTERNAL_SERVER_ERROR
-      )}
+    if (error.isJoi === true) {
+      return handlePrismaError(
+        res, undefined, error?.message, ResponseCodes.INTERNAL_SERVER_ERROR
+      )
+    }
 
-    console.log("Error in aggregationtran:", error);    
-   return handlePrismaError(
-    res,undefined, error.meta.message ,ResponseCodes.INTERNAL_SERVER_ERROR
-  )}
+    console.log("Error in aggregationtran:", error);
+    return handlePrismaError(
+      res, undefined, error?.message, ResponseCodes.INTERNAL_SERVER_ERROR
+    )
+  }
 };
 
 export default aggregationtran;   

@@ -1,4 +1,4 @@
-import {handlePrismaSuccess,handlePrismaError} from "../services/prismaResponseHandler.js";
+import { handlePrismaSuccess, handlePrismaError } from "../services/prismaResponseHandler.js";
 import prisma from "../../DB/db.config.js";
 import { ResponseCodes } from "../../constant.js";
 
@@ -55,8 +55,8 @@ const getAllProducts = async (req, res) => {
       label: `${process.env.URL}${el.label}`,
       leaflet: `${process.env.URL}${el.leaflet}`,
     }));
-    handlePrismaSuccess(res, "Get all products successfully", {products: newProducts,total,});
-    
+    handlePrismaSuccess(res, "Get all products successfully", { products: newProducts, total, });
+
   } catch (error) {
     console.error("Error while fetching products:", error);
     handlePrismaError(
@@ -70,6 +70,7 @@ const getAllProducts = async (req, res) => {
 
 const getPackagingHierarchy = async (req, res) => {
   try {
+    console.log('getPackagingHierarchy')
     const { productId, currentLevel } = req.body;
     let totalProduct = 0
     if (!productId) {
@@ -103,7 +104,7 @@ const getPackagingHierarchy = async (req, res) => {
         totalProduct += product.productNumber;
         packaging_size["level0"] = product.productNumber;
       }
-      if (product.firstLayer      ) {
+      if (product.firstLayer) {
         totalProduct += product.firstLayer;
         packaging_size["level1"] = product.firstLayer;
       }
@@ -118,11 +119,9 @@ const getPackagingHierarchy = async (req, res) => {
       packaging_size["level5"] = 1;
       totalProduct++
 
-      // console.log(packaging_size)
       const packaging_size_value = Object.values(packaging_size);
       packaging_size_value.push(1);
       const productLevel = [];
-      console.log(packaging_size_value);
       for (let i = currentLevel; i < product.packagingHierarchy + 1; i++) {
         productLevel.push(
           packaging_size_value[i] / packaging_size_value[i + 1]
@@ -130,9 +129,8 @@ const getPackagingHierarchy = async (req, res) => {
       }
 
       var perPackageProduct = productLevel[currentLevel] + 1
-      console.log(productLevel)
-      console.log(perPackageProduct)
       const [quantity, packageNo] = productLevel;
+      const aggregation_transactionInfo = await prisma.aggregation_transaction.findFirst({ where: { product_id: productId } })
       handlePrismaSuccess(res, "Get successfully", {
         packageNo,
         quantity,
@@ -140,6 +138,7 @@ const getPackagingHierarchy = async (req, res) => {
         currentLevel: currentLevel,
         totalProduct,
         totalLevel: product.packagingHierarchy,
+        transactionId: aggregation_transactionInfo.transaction_id
       });
     }
   } catch (error) {
