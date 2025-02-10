@@ -1,7 +1,7 @@
 import { handlePrismaSuccess, handlePrismaError } from "../services/prismaResponseHandler.js";
 import prisma from "../../DB/db.config.js";
 import { ResponseCodes } from "../../constant.js";
-
+import { logAudit } from "../utils/auditLog.js";
 const getAllProducts = async (req, res) => {
   const {
     limit = 25,
@@ -71,7 +71,21 @@ const getAllProducts = async (req, res) => {
 const getPackagingHierarchy = async (req, res) => {
   try {
     console.log('getPackagingHierarchy')
-    const { productId, currentLevel } = req.body;
+    console.log(req.body)
+    const { productId, currentLevel, isRestorePreviousState } = req.body;
+    const { auditlog_username, auditlog_userid } = req;
+    console.log(auditlog_username);
+    if (isRestorePreviousState) {
+      return handlePrismaSuccess(res, "Get successfully", {
+        packageNo: req.body.packageNo,
+        quantity: req.body.quantity,
+        perPackageProduct: req.body.perPackageProduct,
+        currentLevel: req.body.currentLevel,
+        totalProduct: req.body.totalProduct,
+        totalLevel: req.body.totalLevel,
+        transactionId: req.body.transactionId
+      });
+    }
     let totalProduct = 0
     if (!productId) {
       return handlePrismaError(
@@ -131,6 +145,15 @@ const getPackagingHierarchy = async (req, res) => {
       var perPackageProduct = productLevel[currentLevel] + 1
       const [quantity, packageNo] = productLevel;
       const aggregation_transactionInfo = await prisma.aggregation_transaction.findFirst({ where: { product_id: productId } })
+      console.log(aggregation_transactionInfo)
+      if (req.body.audit_log?.audit_log && currentLevel == 0) {
+        await logAudit({
+          performed_action: `Scan transaction started with Transaction ID: ${aggregation_transactionInfo.transaction_id}, Product ID: ${aggregation_transactionInfo.product_id}, Batch ID: ${aggregation_transactionInfo.batch_id}, initiated by User ID: ${req.id}.`,
+          remarks: req.body.audit_log.remarks,
+          user_name: auditlog_username,
+          user_id: auditlog_userid,
+        });
+      }
       handlePrismaSuccess(res, "Get successfully", {
         packageNo,
         quantity,

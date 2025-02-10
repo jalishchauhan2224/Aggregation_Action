@@ -10,9 +10,10 @@ import scanValidationRouter from "./scanValidationRouter.js";
 import reprintRouter from "./reprintRouter.js";
 import lableRouter from "./lableRouter.js";
 import printerAllocationRouter from "./printerAllocationRouter.js";
+import codeReplaceRouter from "./replaceCodeRouter.js";
+import codeRemapRouter from './codeRemapRouter.js'
 // authRouter
 router.use("/api/v1/auth", authRouter);
-
 // fetch all products
 router.use("/api/v1", verifyAuthentication, productRouter)
 
@@ -34,5 +35,10 @@ router.use("/api/v1/reprint", verifyAuthentication, reprintRouter);
 
 router.use("/api/v1/printerallocation", verifyAuthentication, printerAllocationRouter)
 
+// code-replace
+router.use("/api/v1/code-replace", verifyAuthentication, codeReplaceRouter);
+
+// remap
+router.use("/api/v1/code-remap", verifyAuthentication, codeRemapRouter);
 
 export default router

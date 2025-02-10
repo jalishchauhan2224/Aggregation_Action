@@ -2,11 +2,14 @@ import { ResponseCodes } from "../../constant.js";
 import prisma from "../../DB/db.config.js";
 import { dropOutValidattion, dropoutCodesValidation } from "../validation/dropOutValidation.js";
 import { handlePrismaError, handlePrismaSuccess } from "../services/prismaResponseHandler.js";
-import { type } from "@hapi/joi/lib/extend.js";
+import { logAudit } from "../utils/auditLog.js";
 
 const dropoutWholeBatch = async (req, res) => {
   try {
+    console.log(req.body)
     const validation = await dropOutValidattion.validateAsync(req.body)
+    const { auditlog_username, auditlog_userid } = req;
+    console.log(auditlog_username);
     console.log("product id", validation.product_id);
     console.log("batch id", validation.batch_id);
 
@@ -87,6 +90,14 @@ const dropoutWholeBatch = async (req, res) => {
       );
     }
     console.log("Generated Codes:", codes);
+    if (validation.audit_log?.audit_log) {
+      await logAudit({
+        performed_action: validation.audit_log.performed_action,
+        remarks: validation.audit_log.remarks,
+        user_name: auditlog_username,
+        user_id: auditlog_userid,
+      });
+    }
 
     return handlePrismaSuccess(res, "Batch dropout successfully");
 
@@ -212,6 +223,9 @@ const dropoutCodes = async (req, res) => {
 
   console.log("Dropout req body ", req.body);
   const validation = await dropoutCodesValidation.validateAsync(req.body);
+  const { auditlog_username, auditlog_userid } = req;
+  console.log(auditlog_username);
+
   try {
 
     if (!validation.product_id || !validation.batch_id) {
@@ -296,7 +310,14 @@ const dropoutCodes = async (req, res) => {
     console.log("Grouping codes by level ", result);
 
     await processResults(result, tableNamePrefix, validation.dropout_reason, packagingHierarchy);
-
+    if (validation.audit_log?.audit_log) {
+      await logAudit({
+        performed_action: validation.audit_log.performed_action,
+        remarks: validation.audit_log.remarks,
+        user_name: auditlog_username,
+        user_id: auditlog_userid,
+      });
+    }
     return handlePrismaSuccess(
       res, "Scanned codes dropped successfully",
     );

@@ -28,6 +28,8 @@ const calculateGtinCheckDigit = input => {
 const SsccLable = async (req, res) => {
     try {
         const validation = await lableValidation.validateAsync(req.body)
+        const { auditlog_username, auditlog_userid } = req;
+        console.log(auditlog_username);
         // console.log(validation); 
         const { SsccCode, SerialNo, mac_address } = validation
 
@@ -175,10 +177,18 @@ const SsccLable = async (req, res) => {
                     // Remove any remaining unused placeholders (e.g., "V10", "V11")
                     modifiedContent = modifiedContent.replace(/"V\d+"/g, '""');
 
-                    printer.write(modifiedContent, () => {
+                    printer.write(modifiedContent, async () => {
                         // Close the connection after printing
                         printer.destroy();
                         console.log("Printing complete and connection closed");
+                        if (validation.audit_log?.audit_log) {
+                            await logAudit({
+                                performed_action: validation.audit_log.performed_action,
+                                remarks: validation.audit_log.remarks,
+                                user_name: auditlog_username,
+                                user_id: auditlog_userid,
+                            });
+                        }
                         return handlePrismaSuccess(res, "Get lable Details",
                             {
                                 ProductName: productHistory.product_name,

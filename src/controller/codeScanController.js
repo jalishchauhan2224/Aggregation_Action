@@ -2,6 +2,8 @@ import prisma from "../../DB/db.config.js";
 import { codeValid, codeScanValid } from "../validation/codeScanValidation.js";
 import { ResponseCodes } from "../../constant.js";
 import { handlePrismaError, handlePrismaSuccess } from "../services/prismaResponseHandler.js";
+import { logAudit } from "../utils/auditLog.js";
+
 const scanValidation = async (req, res) => {
   try {
     const validation = await codeValid.validateAsync(req.body);
@@ -29,7 +31,7 @@ const scanValidation = async (req, res) => {
         product_id: validation.productId,
       },
     });
-    // console.log("product ", productDetails);
+    console.log("product ", productDetails);
     if (!productDetails) {
       return handlePrismaError(
         res, undefined, "Invalid Product Code", ResponseCodes.NOT_FOUND
@@ -67,15 +69,33 @@ const scanValidation = async (req, res) => {
     console.log("valid Package level");
 
     // 3.
-    console.log(validation.uniqueCode)
     const batchCheck = await prisma.$queryRawUnsafe(`SELECT batch_id FROM ${tableName} WHERE unique_code = $1`, validation.uniqueCode);
-    console.log(batchCheck, validation.batchId)
+    console.log(batchCheck[0].batch_id, validation.batchId)
     if (batchCheck[0].batch_id != validation.batchId) {
       return handlePrismaError(
         res, undefined, "Scanned Code is from different Batch", ResponseCodes.BAD_REQUEST
       );
     }
     console.log("batch_id valid");
+
+    const getTable = await prisma.$queryRawUnsafe(`SELECT * FROM ${tableName} WHERE unique_code = $1`, validation.uniqueCode)
+    if (getTable[0].is_aggregated) {
+      return handlePrismaError(
+        res, undefined, "Already aggregated  code", ResponseCodes.BAD_REQUEST
+      );
+    }
+    else {
+      const aggregated = await prisma.$queryRawUnsafe(`UPDATE ${tableName} SET is_aggregated = TRUE WHERE unique_code = $1`, validation.uniqueCode)
+      console.log(aggregated);
+      console.log("code aggregated done", aggregated);
+    }
+
+
+    if (getTable[0].is_dropped) {
+      return handlePrismaError(
+        res, undefined, `${validation.uniqueCode} is  already dropout`, ResponseCodes.BAD_REQUEST
+      );
+    }
 
 
     return handlePrismaSuccess(res,
@@ -98,7 +118,10 @@ const scanValidation = async (req, res) => {
 const codeScan = async (req, res) => {
   try {
     let serialNo = undefined
+    const { id } = req;
+    console.log("Id :", id);
     console.log("code scan :", req.body)
+    const { auditlog_username, auditlog_userid } = req;
     let validation = await codeScanValid.validateAsync(req.body)
     let sscc_code = undefined;
     if (validation.totalProduct == 0) {
@@ -233,16 +256,7 @@ const codeScan = async (req, res) => {
     //   console.log(`Code is store in scanned table ${scannedCode != undefined}`)
     // }
 
-    if (getTable[0].is_aggregated) {
-      return handlePrismaError(
-        res, undefined, "Already scanned code", ResponseCodes.BAD_REQUEST
-      );
-    }
-    else {
-      const aggregated = await prisma.$queryRawUnsafe(`UPDATE ${tableName} SET is_aggregated = TRUE WHERE unique_code = $1`, validation.uniqueCode)
-      console.log(aggregated);
-      console.log("code aggregated done", aggregated);
-    }
+
 
     // if (validation.currentPackageLevel > 0) {
     //   const [sscc_code_info] = await prisma.$queryRaw`Select * from sscc_codes where "product_id"=${productDetails.product_id}::uuid AND "batch_id"=${productDetails.batch_id}::uuid AND serial_no is NOT NULL AND printed=false  ORDER BY sscc_code ASC LIMIT 1`;
@@ -290,7 +304,6 @@ const codeScan = async (req, res) => {
     }
     console.log("Response of code scan ")
     if (validation.quantity == 0) {
-
       const [ssccInfo] = await prisma.$queryRaw`Select * from sscc_codes where "product_id"=${productDetails.product_id}::uuid AND pack_level=${validation.currentPackageLevel} AND "batch_id"=${productDetails.batch_id}::uuid AND serial_no is NULL  ORDER BY sscc_code ASC LIMIT 1`;
       console.log("SSCC info------>", ssccInfo)
       if (!ssccInfo) {
@@ -319,7 +332,14 @@ const codeScan = async (req, res) => {
       sscc_code = ssccInfo.sscc_code;
       console.log(`SSCC information for ID ${ssccInfo.id} is updated.`)
     }
-
+    if (totalProduct == 0 && validation.audit_log?.audit_log) {
+      await logAudit({
+        performed_action: validation.audit_log.performed_action,
+        remarks: validation.audit_log.remarks,
+        user_name: auditlog_username,
+        user_id: auditlog_userid,
+      });
+    }
     console.log({ packageNo: validation.packageNo, currentPackageLevel: validation.checkPackageLevel, quantity: validation.quantity, perPackageProduct: validation.perPackageProduct, totalLevel: validation.totalLevel, totalProduct: validation.totalProduct, currentIndex: validation.currentIndex, currentPackageLevel: validation.currentPackageLevel })
     return handlePrismaSuccess(res,
       "Barcode scanned successfully.",

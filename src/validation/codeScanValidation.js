@@ -17,7 +17,8 @@ const codeScanValid = Joi.object({
     totalLevel: Joi.number().required(),
     perPackageProduct: Joi.number().required(),
     totalProduct: Joi.number().required(),
-    currentIndex: Joi.number().integer()
+    currentIndex: Joi.number().integer(),
+    audit_log: Joi.object().optional()
 })
 
 

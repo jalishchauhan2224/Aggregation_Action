@@ -69,34 +69,35 @@ model ApiScreenRegistry {
 }
 
 model User {
-  id                         String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id                    String                    @unique @db.VarChar(50)
-  user_name                  String                    @unique @db.VarChar(50)
-  email                      String                    @default("") @db.VarChar(255)
-  phone_number               String                    @default("") @db.VarChar(20)
-  password                   String                    @db.VarChar(255)
-  location_id                String?                   @db.Uuid
-  department_id              String?                   @db.Uuid
-  designation_id             String?                   @db.Uuid
-  profile_photo              String?                   @db.VarChar(255)
-  esign_status               esign_status              @default(null)
-  is_active                  Boolean                   @default(true)
-  role                       Role                      @default(user)
-  jwt_token                  String?                   @db.VarChar(1024)
-  last_activity_at           DateTime?                 @db.Timestamptz(6)
-  password_expires_on        DateTime                  @default(dbgenerated("(now() + '90 days'::interval)")) @db.Timestamptz(6)
-  old_passwords              String[]                  @default(dbgenerated("(ARRAY[]::character varying[])::character varying(255)[]")) @db.VarChar(255)
-  failed_login_attempt_count Int                       @default(0)
-  last_failed_login_at       DateTime?                 @db.Timestamptz(6)
-  account_locked_until_at    DateTime?                 @db.Timestamptz(6)
-  accessibility              Json?
-  created_at                 DateTime                  @default(now()) @db.Timestamptz(6)
-  updated_at                 DateTime                  @default(now()) @db.Timestamptz(6)
-  user_history               UserHistory[]
-  department                 departments?              @relation(fields: [department_id], references: [id])
-  designation                designations?             @relation(fields: [designation_id], references: [id])
-  location                   locations?                @relation(fields: [location_id], references: [id])
-  Aggregation_transaction    Aggregation_transaction[]
+  id                                         String                                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                                    String                                   @unique @db.VarChar(50)
+  user_name                                  String                                   @unique @db.VarChar(50)
+  email                                      String                                   @default("") @db.VarChar(255)
+  phone_number                               String                                   @default("") @db.VarChar(20)
+  password                                   String                                   @db.VarChar(255)
+  location_id                                String?                                  @db.Uuid
+  department_id                              String?                                  @db.Uuid
+  designation_id                             String?                                  @db.Uuid
+  profile_photo                              String?                                  @db.VarChar(255)
+  esign_status                               esign_status                             @default(null)
+  is_active                                  Boolean                                  @default(true)
+  role                                       Role                                     @default(user)
+  jwt_token                                  String?                                  @db.VarChar(1024)
+  last_activity_at                           DateTime?                                @db.Timestamptz(6)
+  password_expires_on                        DateTime                                 @default(dbgenerated("(now() + '90 days'::interval)")) @db.Timestamptz(6)
+  old_passwords                              String[]                                 @default(dbgenerated("(ARRAY[]::character varying[])::character varying(255)[]")) @db.VarChar(255)
+  failed_login_attempt_count                 Int                                      @default(0)
+  last_failed_login_at                       DateTime?                                @db.Timestamptz(6)
+  account_locked_until_at                    DateTime?                                @db.Timestamptz(6)
+  accessibility                              Json?
+  created_at                                 DateTime                                 @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime                                 @default(now()) @db.Timestamptz(6)
+  user_history                               UserHistory[]
+  department                                 departments?                             @relation(fields: [department_id], references: [id])
+  designation                                designations?                            @relation(fields: [designation_id], references: [id])
+  location                                   locations?                               @relation(fields: [location_id], references: [id])
+  Aggregation_transaction                    Aggregation_transaction[]
+  Aggregation_transaction_current_scan_state AggregationTransactionCurrentScanState[]
 
   @@map("users")
 }
@@ -816,24 +817,40 @@ model printer_allocation {
 }
 
 model Aggregation_transaction {
-  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  transaction_id            String          @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  product_id                String          @db.Uuid
-  batch_id                  String          @db.Uuid
-  user_id                   String          @db.Uuid
-  aggregation_count         Int             @default(0)
-  product_gen_id            String
-  packagingHierarchy        Int
-  producthistory_uuid       String          @db.Uuid
-  status                    Status          @default(pending)
-  created_at                DateTime        @default(now()) @db.Timestamptz(6)
-  updated_at                DateTime        @updatedAt @db.Timestamptz(6)
-  product                   product         @relation(fields: [product_id], references: [id])
-  batchByBatchId            batch           @relation(fields: [batch_id], references: [id], name: "batch_id")
-  User                      User            @relation(fields: [user_id], references: [id])
-  product_history           product_history @relation(fields: [packagingHierarchy], references: [packagingHierarchy])
-  Scanned_code              Scanned_code[]
-  batchByProductHistoryUUID batch           @relation(fields: [producthistory_uuid], references: [producthistory_uuid], name: "producthistory_uuid")
+  id                                     String                                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transaction_id                         String                                   @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id                             String                                   @db.Uuid
+  batch_id                               String                                   @db.Uuid
+  user_id                                String                                   @db.Uuid
+  aggregation_count                      Int                                      @default(0)
+  product_gen_id                         String
+  packagingHierarchy                     Int
+  producthistory_uuid                    String                                   @db.Uuid
+  status                                 Status                                   @default(pending)
+  created_at                             DateTime                                 @default(now()) @db.Timestamptz(6)
+  updated_at                             DateTime                                 @updatedAt @db.Timestamptz(6)
+  product                                product                                  @relation(fields: [product_id], references: [id])
+  batchByBatchId                         batch                                    @relation(fields: [batch_id], references: [id], name: "batch_id")
+  User                                   User                                     @relation(fields: [user_id], references: [id])
+  product_history                        product_history                          @relation(fields: [packagingHierarchy], references: [packagingHierarchy])
+  Scanned_code                           Scanned_code[]
+  batchByProductHistoryUUID              batch                                    @relation(fields: [producthistory_uuid], references: [producthistory_uuid], name: "producthistory_uuid")
+  AggregationTransactionCurrentScanState AggregationTransactionCurrentScanState[]
+}
+
+model AggregationTransactionCurrentScanState {
+  id                        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                   String                  @db.Uuid
+  aggregated_transcation_id String                  @unique @db.Uuid
+  currentPackageLevel       Int
+  quantity                  Int
+  packagedNo                Int
+  perPackageProduct         Int
+  totalLevel                Int
+  totalProduct              Int
+  currentIndex              Int?
+  users                     User                    @relation(fields: [user_id], references: [id])
+  AggregrationTransaction   Aggregation_transaction @relation(fields: [aggregated_transcation_id], references: [transaction_id])
 }
 
 model Scanned_code {

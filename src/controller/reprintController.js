@@ -3,7 +3,7 @@ import prisma from "../../DB/db.config.js";
 import reprintValidation from "../validation/reprintValidation.js";
 import { handlePrismaError, handlePrismaSuccess } from "../services/prismaResponseHandler.js";
 import moment from "moment/moment.js";
-
+import { logAudit } from "../utils/auditLog.js";
 // const PRINTER_IP = "192.168.1.30";
 // const PRINTER_PORT = 9100;
 import { readFile } from "fs";
@@ -32,7 +32,8 @@ const reprint = async (req, res) => {
 
     const validation = await reprintValidation.validateAsync(req.body);
     const { product_id, batch_id, SsccCode, mac_address } = validation;
-
+    const { auditlog_username, auditlog_userid } = req;
+    console.log(auditlog_username);
     if (!mac_address) {
       return handlePrismaError(
         res, undefined, "mac address not found", ResponseCodes.BAD_REQUEST
@@ -166,7 +167,15 @@ const reprint = async (req, res) => {
           // Remove any remaining unused placeholders (e.g., "V10", "V11")
           modifiedContent = modifiedContent.replace(/"V\d+"/g, '""');
 
-          printer.write(modifiedContent, () => {
+          printer.write(modifiedContent, async () => {
+            if (validation.audit_log?.audit_log) {
+              await logAudit({
+                performed_action: validation.audit_log.performed_action,
+                remarks: validation.audit_log.remarks,
+                user_name: auditlog_username,
+                user_id: auditlog_userid,
+              });
+            }
             // Close the connection after printing
             printer.destroy();
             console.log("Printing complete and connection closed");
