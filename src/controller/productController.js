@@ -76,15 +76,7 @@ const getPackagingHierarchy = async (req, res) => {
     const { auditlog_username, auditlog_userid } = req;
     console.log(auditlog_username);
     if (isRestorePreviousState) {
-      return handlePrismaSuccess(res, "Get successfully", {
-        packageNo: req.body.packageNo,
-        quantity: req.body.quantity,
-        perPackageProduct: req.body.perPackageProduct,
-        currentLevel: req.body.currentLevel,
-        totalProduct: req.body.totalProduct,
-        totalLevel: req.body.totalLevel,
-        transactionId: req.body.transactionId
-      });
+      return handlePrismaSuccess(res, "Get successfully",{...req.body});
     }
     let totalProduct = 0
     if (!productId) {

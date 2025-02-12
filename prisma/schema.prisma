@@ -849,6 +849,7 @@ model AggregationTransactionCurrentScanState {
   totalLevel                Int
   totalProduct              Int
   currentIndex              Int?
+  scannedCode               String[]
   users                     User                    @relation(fields: [user_id], references: [id])
   AggregrationTransaction   Aggregation_transaction @relation(fields: [aggregated_transcation_id], references: [transaction_id])
 }

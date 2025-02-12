@@ -9,7 +9,7 @@ export const aggregratedTransactionScanMiddleware = async (request, response, ne
         const aggregratedTransactionCurrentStateInfo = await prisma.aggregationTransactionCurrentScanState.findFirst({ where: { user_id: id } });
         if (aggregratedTransactionCurrentStateInfo) {
 
-            const aggregratedTransactionInfo = await prisma.aggregation_transaction.findFirst({ where: { id: aggregratedTransactionCurrentStateInfo.aggregated_transcation_id } });
+            const aggregratedTransactionInfo = await prisma.aggregation_transaction.findFirst({ where: { transaction_id: aggregratedTransactionCurrentStateInfo.aggregated_transcation_id } });
             if (!aggregratedTransactionInfo) {
                 return handlePrismaError(response, null, "Aggregation data not found.Please check your request and try again.", ResponseCodes.NOT_FOUND)
             }
@@ -22,6 +22,8 @@ export const aggregratedTransactionScanMiddleware = async (request, response, ne
                 request.body.totalProduct = aggregratedTransactionCurrentStateInfo.totalProduct;
                 request.body.transactionId = aggregratedTransactionInfo.transaction_id;
                 request.body.currentIndex = aggregratedTransactionCurrentStateInfo.currentIndex;
+                console.log(aggregratedTransactionCurrentStateInfo.scannedCode)
+                request.body.scannedCodes = aggregratedTransactionCurrentStateInfo.scannedCode;
                 request.body.isRestorePreviousState = true
 
                 const deleteaggregationTransactionCurrentScanState = await prisma.aggregationTransactionCurrentScanState.delete({ where: { id: aggregratedTransactionCurrentStateInfo.id } })
@@ -32,6 +34,7 @@ export const aggregratedTransactionScanMiddleware = async (request, response, ne
                 }
             }
         }
+        console.log(request.body)
         next()
     }
     catch (error) {

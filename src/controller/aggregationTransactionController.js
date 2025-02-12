@@ -152,7 +152,8 @@ const handleAggregatedTransactionState = async (req, res) => {
       perPackageProduct: validatedData.perPackageProduct,
       totalLevel: validatedData.totalLevel,
       totalProduct: validatedData.totalProduct,
-      currentIndex: validatedData.currentIndex
+      currentIndex: validatedData.currentIndex,
+      scannedCode: validatedData.scannedCodes,
     };
 
     // Update the existing state if it exists, otherwise create a new one
@@ -160,11 +161,11 @@ const handleAggregatedTransactionState = async (req, res) => {
     if (existingState) {
       transactionStateResult = await prisma.aggregationTransactionCurrentScanState.update({
         where: { id: existingState.id },  // Assuming the table has an 'id' field to target the specific record
-        data: transactionStateData
+        data: { ...transactionStateData }
       });
     } else {
       transactionStateResult = await prisma.aggregationTransactionCurrentScanState.create({
-        data: transactionStateData
+        data: { ...transactionStateData }
       });
     }
 

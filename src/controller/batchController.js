@@ -15,9 +15,9 @@ const getBatchesByProductId = async (request, res) => {
     }).catch(error => console.log("Error in get batches ", error));
 
     handlePrismaSuccess(
-      res, "Get batches successfully", { batches, total: batches.length }
+      res, "Get batches successfully", { batches, total: batches?.length }
     );
-    
+
   } catch (error) {
     console.log("get batches error", error);
     handlePrismaError(

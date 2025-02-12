@@ -112,17 +112,18 @@ const reprint = async (req, res) => {
     console.log("barcode1", barcode1);
     const barcode2 = `00${SsccCode}`;
     console.log("barcode2", barcode2);
+     console.log("Serial No ",ssccCodeRecord[0].serial_no)
 
     try {
       // Read the file content
-      readFile(inputFile, "utf8", (err, data) => {
+      await readFile(inputFile, "utf8",async (err, data) => {
         if (err) {
           console.error("Error reading file:", err);
           return handlePrismaError(res, null, "Error reading file", ResponseCodes.INTERNAL_SERVER_ERROR);
         }
 
         // Connect to the printer and send the modified content
-        printer.connect(PRINTER_PORT, PRINTER_IP, () => {
+        await printer.connect(PRINTER_PORT, PRINTER_IP, () => {
           console.log("Connected to printer");
           let modifiedContent = data;
 
@@ -141,7 +142,7 @@ const reprint = async (req, res) => {
             SsccCode,
             // "GTIN :",
             newGTIN,
-            `${ssccCodeRecord[0].serial_no}`,
+            `${ssccCodeRecord[0]?.serial_no}`,
             // "Shipper Number: ",
             // "2 of ______",
             // "Gross Wt.:",
@@ -181,11 +182,7 @@ const reprint = async (req, res) => {
             console.log("Printing complete and connection closed");
           });
         });
-        printer.on("error", (err) => {
-          console.error("Printer error:", err);
-          printer.destroy();
-          return handlePrismaError(res, null, "Printer error", ResponseCodes.INTERNAL_SERVER_ERROR);
-        });
+       
       });
 
     } catch (error) {

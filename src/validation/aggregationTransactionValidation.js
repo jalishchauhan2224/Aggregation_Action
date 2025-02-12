@@ -17,7 +17,8 @@ export const aggregationTransactionCurrentStateValidation = Joi.object({
     perPackageProduct: Joi.number().required(),
     totalLevel: Joi.number().required(),
     totalProduct: Joi.number().required(),
-    currentIndex: Joi.number().optional()
+    currentIndex: Joi.number().optional(),
+    scannedCodes: Joi.array().required()
 })
 
 export default AggregationValidation;

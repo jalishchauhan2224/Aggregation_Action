@@ -181,7 +181,6 @@ const codeScan = async (req, res) => {
         ],
       },
     });
-    console.log(alreadyScanned)
     if (alreadyScanned) {
       return handlePrismaError(
         res, undefined, "Unique code his already scanned", ResponseCodes.BAD_REQUEST
@@ -293,10 +292,10 @@ const codeScan = async (req, res) => {
         if (validation.packageNo == 0 && validation.totalProduct == 1) {
           validation.currentPackageLevel = 5
         }
-        else if (validation.perPackageProduct == 0) {
+        else if (validation.perPackageProduct == 0 && validation.totalProduct > 1) {
           validation.currentPackageLevel = 0
         }
-        else {
+        else if (validation.totalProduct > 1) {
           validation.currentPackageLevel++;
           validation.currentIndex = 0
         }
@@ -304,35 +303,67 @@ const codeScan = async (req, res) => {
     }
     console.log("Response of code scan ")
     if (validation.quantity == 0) {
+      console.log(validation.currentPackageLevel)
       const [ssccInfo] = await prisma.$queryRaw`Select * from sscc_codes where "product_id"=${productDetails.product_id}::uuid AND pack_level=${validation.currentPackageLevel} AND "batch_id"=${productDetails.batch_id}::uuid AND serial_no is NULL  ORDER BY sscc_code ASC LIMIT 1`;
-      console.log("SSCC info------>", ssccInfo)
+
+      // console.log("SSCC info------>", ssccInfo)
       if (!ssccInfo) {
         return handlePrismaError(
           res, undefined, "SSCC record is not found", ResponseCodes.NOT_FOUND
         )
       }
-      const ssccInfo_not_null = (await prisma.$executeRaw` Select * from sscc_codes where "product_id"=${productDetails.product_id}::uuid AND pack_level=${validation.currentPackageLevel} AND "batch_id"=${productDetails.batch_id}::uuid AND serial_no is NOT NULL  ORDER BY sscc_code`) + 1
-      console.log("not null :", ssccInfo_not_null)
-      console.log(ssccInfo)
+      let [ssccInfo_not_null] = await prisma.$queryRaw` Select * from sscc_codes where "product_id"=${productDetails.product_id}::uuid AND pack_level=${validation.currentPackageLevel} AND "batch_id"=${productDetails.batch_id}::uuid AND serial_no is NOT NULL  ORDER BY sscc_code DESC LIMIT 1`
+      let index = 0
+      if (!ssccInfo_not_null) {
+        index = 1
+      }
+      else {
+        index = ssccInfo_not_null.serial_no + 1
+      }
+      // const ssccInfo_not_null = (await prisma.$executeRaw` Select * from sscc_codes where "product_id"=${productDetails.product_id}::uuid AND pack_level=${validation.currentPackageLevel} AND "batch_id"=${productDetails.batch_id}::uuid AND serial_no is NOT NULL  ORDER BY sscc_code`) + 1
+      // console.log("not null :", ssccInfo_not_null)
+      // console.log(ssccInfo)
       const ssccInfoUpdate = await prisma.$executeRaw` 
         UPDATE "sscc_codes"
-        SET "serial_no" = ${ssccInfo_not_null + 1}
+        SET "serial_no" = ${index}
         WHERE "sscc_codes".id = ${ssccInfo.id}::uuid ;
       `;
 
       if (!ssccInfoUpdate) {
-        console.log(`SSCC information for ID ${ssccInfo.id} is not updated.`)
         return handlePrismaError(
           res, undefined, "We encountered an issue while updating the information. Please ensure the data is valid and try again.", ResponseCodes.BAD_REQUEST
         )
       }
 
-      serialNo = ssccInfo_not_null + 1
-
+      serialNo = index;
       sscc_code = ssccInfo.sscc_code;
-      console.log(`SSCC information for ID ${ssccInfo.id} is updated.`)
+      console.log(validation.previousChildLevel)
+      console.log(validation.totalQuantity > 0, validation.currentPackageLevel > 0, validation.previousChildLevel > 0, validation.previousChildLevel < 5)
+      if (validation.totalQuantity > 0 && validation.currentPackageLevel > 0 && (validation.previousChildLevel >= 0 && validation.previousChildLevel < 5)) {
+        const childTable = `${productDetails.product_gen_id.toLowerCase()
+          }${validation.previousChild} _codes`
+        console.log(childTable)
+        const setParentIdInChildTable = await prisma.$executeRawUnsafe(`
+          UPDATE ${productDetails.product_gen_id.toLowerCase()}${validation.previousChildLevel}_codes 
+          SET parent_id = '${ssccInfo.id}'
+          WHERE id IN (
+              SELECT id FROM ${productDetails.product_gen_id.toLowerCase()}${validation.previousChildLevel}_codes 
+              WHERE parent_id IS NULL AND is_aggregated=true
+              ORDER BY id ASC 
+              LIMIT ${validation.totalQuantity}
+          )
+      `);
+        console.log(setParentIdInChildTable)
+        if (!setParentIdInChildTable) {
+          console.log("Not update in ", productDetails.product_gen_id.toLowerCase(), validation.previousChildLevel, "_codes")
+        }
+        console.log("update in ", productDetails.product_gen_id.toLowerCase(), validation.previousChildLevel, "_codes")
+
+      }
     }
-    if (totalProduct == 0 && validation.audit_log?.audit_log) {
+
+
+    if (validation.totalProduct == 0 && validation.audit_log?.audit_log) {
       await logAudit({
         performed_action: validation.audit_log.performed_action,
         remarks: validation.audit_log.remarks,
